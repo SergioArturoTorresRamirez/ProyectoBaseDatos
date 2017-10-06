@@ -257,3 +257,72 @@ BEGIN
 END
 
 DROP TRIGGER REVIZA_PAGO_HORAS_PROFESOR
+
+--Trigger que reviza que al insertar una asistencia de un profesor sea en las horas registradas 
+CREATE TRIGGER REVIZA_ASISTENCIA 
+ON CLASES.T_Asistencia
+AFTER INSERT 
+AS 
+  declare @cont int
+  SELECT @cont=COUNT(*)
+		 FROM  T_Horario as h ,T_Curso as c
+		 WHERE c.id_Profesor=(SELECT id_Profesor FROM inserted) AND h.id_Horario = c.id_Horario
+		 AND ((SELECT convert(char(8), fecha_hora, 108) as [hh:mm:ss]FROM inserted) BETWEEN h.hora_Inicio AND h.hora_Fin) 
+		 AND  ((SELECT CONVERT (char(10), fecha_hora, 23)  FROM inserted) BETWEEN c.fecha_Inicio AND c.fecha_Fin)
+		if (@cont>0)
+			 PRINT ('Insercion correcta')
+		else
+			BEGIN
+				 raiserror ('No coinciden los horarios', 16, 1)
+			     rollback transaction
+			END
+
+-- Trigger que reviza que el alumno no se inscriba en un curso con el mismo horario 
+
+CREATE TRIGGER REVIZA_HORARIO 
+ON CLASES.T_Inscripcion
+AFTER INSERT 
+AS 
+  declare @cont int
+		-- Reviza que no coincidan las id de los horarios del alumno y las horas 
+  		 SELECT *
+	         FROM  T_Inscripcion as i, T_Curso as c, T_Horario as h
+			 -- Obtiene los datos de las inscripciones del alumno  
+		     WHERE i.id_Alumno=(SELECT id_Alumno FROM inserted) AND i.id_Inscripcion!=(SELECT id_Inscripcion FROM inserted) AND c.id_Curso=i.id_Curso AND h.id_Horario = c.id_Horario 
+			 -- Copara los horarios 
+			AND c.id_Horario = (SELECT c1.id_Horario FROM T_Curso as c1, T_Horario as h WHERE c1.id_Curso = (SELECT id_Curso FROM inserted) AND h.id_horario = c1.id_Horario)
+			-- Compara que las horas no se solapen 
+		
+
+		if (@cont=0)
+		 PRINT ('Insercion correcta')
+		else
+			
+			BEGIN
+			raiserror ('Ya se lleva una clase en este horario', 16, 1)
+		rollback transaction
+			END
+
+INSERT INTO CLASES.T_Inscripcion(monto,fecha_hora,id_Admnistrador,id_Alumno,id_Curso) VALUES (10,'2017-09-19 01:00:00',1,3,4)
+
+--Trigger que no permite que se inscriban 2 horarios iguales 
+
+
+CREATE TRIGGER REVIZA_HORARIO_IGUAL
+ON CLASES.T_Horario
+AFTER INSERT 
+AS 
+  declare @cont int
+  
+  SELECT @cont=COUNT(*)
+		 FROM T_Horario as h  
+		 WHERE h.dias =(SELECT dias FROM inserted) AND h.hora_Fin=(SELECT hora_Fin FROM inserted) AND h.hora_Inicio =(SELECT hora_Inicio FROM inserted) AND h.id_Horario =(SELECT id_Horario FROM inserted)
+		if (@cont=0)
+			 PRINT ('Insercion correcta')
+		else
+			BEGIN
+				 raiserror ('Ya existe el horario', 16, 1)
+			     rollback transaction
+			END
+
+INSERT INTO CLASES.T_Horario (hora_Inicio,hora_Fin,dias) VALUES ('5:00','6:00','Sabatino');
